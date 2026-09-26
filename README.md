@@ -1,79 +1,24 @@
 # GeQubit-SweetSpot-Finder
 
-GeQubit-SweetSpot-Finder is a research-oriented Python toolkit for identifying and characterizing **magnetic-field and control-parameter sweet spots in Ge/SiGe hole-spin qubits**.
+GeQubit-SweetSpot-Finder is a research software project for identifying, characterizing, and comparing robust operating points in germanium hole-spin qubits. The central focus is the search for magnetic-field orientations and electrical operating conditions where the qubit becomes less sensitive to fluctuations in its environment while preserving a useful spin response. Rather than treating a “sweet spot” as a single angle or a single optimized number, the project treats sweet-spot identification as a local sensitivity problem that should be described by gradients, curvatures, noise covariance, and robustness against experimental misalignment.
 
-A sweet spot is a region of parameter space where a qubit observable—most commonly the qubit transition frequency—becomes weakly sensitive to fluctuations in one or more control parameters.
+This distinction is important for Ge/SiGe hole-spin qubits because their spin response can be strongly anisotropic. The effective Zeeman splitting depends on the magnetic-field direction through the (g)-tensor, and the (g)-tensor can itself depend on gate voltages and confinement. Consequently, a magnetic-field angle that produces a favorable qubit frequency may not be the same angle that minimizes electrical dephasing. Similarly, a mathematically exact optimum may be extremely narrow and therefore experimentally fragile. The purpose of this repository is to provide tools that can distinguish between these different notions of optimality.
 
-The central question addressed by this repository is:
-
-> Given an anisotropic spin response and a set of noisy control parameters, where should the device be operated to reduce first-order dephasing while retaining useful qubit control?
-
----
-
-## 1. Physical motivation
-
-In a hole-spin qubit, the Zeeman energy generally depends on the full (g)-tensor and the magnetic-field direction.
-
-For magnetic-field magnitude (B) and unit vector (mathbf n),
+For a magnetic field of magnitude (B) pointing along a unit vector (mathbf n(	heta,phi)), the effective qubit frequency is modeled as
 
 [
-f_Z
+f_Z(	heta,phi)
 =
 rac{mu_B B}{h}
 left|
-mathbf g mathbf n
-ight|.
+mathbf g mathbf n(	heta,phi)
+ight|,
 ]
 
-Because the (g)-tensor itself may depend on gate voltages, confinement, strain, and electric field, voltage fluctuations can shift the qubit frequency.
-
-For gate (V_i),
+with
 
 [
-delta f_Z
-approx
-rac{partial f_Z}{partial V_i}delta V_i.
-]
-
-A first-order electrical sweet spot approximately satisfies
-
-[
-rac{partial f_Z}{partial V_i}approx0
-]
-
-for one or more dominant noisy controls.
-
-The same concept can be extended to angular sensitivity, barrier sensitivity, detuning sensitivity, or any differentiable model parameter.
-
----
-
-## 2. Current capabilities
-
-The package currently provides:
-
-- spherical magnetic-field direction generation,
-- effective (g)-factor evaluation,
-- Zeeman-frequency calculation,
-- central finite-difference derivatives,
-- 2D angular gradients,
-- 2D angular Hessians,
-- grid-based angular scans,
-- ranking of candidate sweet spots,
-- covariance-aware frequency-noise estimates,
-- Gaussian quasistatic (T_2^*),
-- simple robustness scores.
-
----
-
-## 3. Mathematical framework
-
-### 3.1 Magnetic-field direction
-
-The magnetic-field unit vector is parameterized as
-
-[
-mathbf n(	heta,phi)
-=
+mathbf n(	heta,phi)=
 egin{pmatrix}
 sin	hetacosphi\
 sin	hetasinphi\
@@ -81,26 +26,9 @@ cos	heta
 end{pmatrix}.
 ]
 
-The effective (g)-factor is
+The angular dependence enters directly through the anisotropic (g)-tensor. This allows the code to scan the full magnetic-field sphere rather than restricting the analysis to a single plane.
 
-[
-g_{mathrm{eff}}(	heta,phi)
-=
-|mathbf gmathbf n|.
-]
-
-Then
-
-[
-f_Z(	heta,phi)
-=
-rac{mu_B B}{h}
-g_{mathrm{eff}}(	heta,phi).
-]
-
-### 3.2 Angular gradient
-
-For an observable (F(	heta,phi)),
+The repository provides numerical derivatives with respect to (	heta) and (phi). If an observable (F(	heta,phi)) is being optimized, its first-order angular sensitivity is represented by
 
 [
 
@@ -112,74 +40,48 @@ left(
 ight).
 ]
 
-The current implementation estimates these derivatives with centered finite differences.
-
-A small gradient indicates local first-order angular insensitivity.
-
-### 3.3 Angular Hessian
-
-The Hessian is
+A point with a small gradient is locally insensitive to small angular errors. However, first derivatives alone are not sufficient to describe robustness. The code therefore also evaluates the angular Hessian,
 
 [
 H=
 egin{pmatrix}
-partial^2F/partial	heta^2 &
-partial^2F/partial	hetapartialphi\
-partial^2F/partialphipartial	heta &
-partial^2F/partialphi^2
-end{pmatrix}.
+rac{partial^2F}{partial	heta^2} &
+rac{partial^2F}{partial	hetapartialphi}\
+rac{partial^2F}{partialphipartial	heta} &
+rac{partial^2F}{partialphi^2}
+end{pmatrix},
 ]
 
-The Hessian helps distinguish broad robust operating regions from narrow extrema.
+which contains information about local curvature. A broad plateau and a sharp extremum may both have zero gradient at the exact optimum, but their Hessians are very different. For experiment, that difference can be decisive.
 
-### 3.4 Multi-gate electrical noise
-
-For sensitivity vector (mathbf s) and voltage covariance matrix (mathbf C),
+The package also supports electrical-noise analysis. If the qubit frequency depends on several noisy control voltages, then the first-order frequency fluctuation is
 
 [
-sigma_f
-=
-sqrt{mathbf s^Tmathbf Cmathbf s}.
+delta f
+approx
+sum_i
+rac{partial f}{partial V_i}delta V_i.
 ]
 
-The Gaussian quasistatic Ramsey convention used here gives
+With sensitivity vector (mathbf s) and voltage covariance matrix (mathbf C_V), the frequency-noise standard deviation is
 
 [
-T_2^*
-=
+sigma_f=
+sqrt{mathbf s^Tmathbf C_Vmathbf s}.
+]
+
+For Gaussian quasistatic noise, the corresponding dephasing time is
+
+[
+T_2^*=
 rac{1}{sqrt{2}pisigma_f}.
 ]
 
-This allows correlated gate noise to be treated explicitly.
+This formulation means that the optimization is not restricted to independent gates. Correlated fluctuations can be represented directly through off-diagonal covariance terms.
 
----
+The repository is organized around a small set of transparent modules. The `core.py` file contains basic effective-(g) and scanning utilities. The `optimization.py` file contains angular direction generation, Zeeman-frequency evaluation, numerical gradients, Hessians, and ranking of candidate operating points. The `robustness.py` file contains covariance-aware noise estimates and simple robustness metrics. Example scripts demonstrate how these functions can be combined, and the automated test suite verifies derivative accuracy against analytical functions and checks expected behavior for synthetic tensors.
 
-## 4. Repository structure
-
-```text
-GeQubit-SweetSpot-Finder/
-├── README.md
-├── pyproject.toml
-├── examples/
-│   ├── example.py
-│   └── robust_sweetspot_demo.py
-├── src/
-│   └── gequbit_sweetspot/
-│       ├── __init__.py
-│       ├── core.py
-│       ├── optimization.py
-│       └── robustness.py
-├── tests/
-│   ├── test_core.py
-│   └── test_optimization.py
-└── .github/
-    └── workflows/
-        └── tests.yml
-```
-
----
-
-## 5. Installation
+Installation is straightforward:
 
 ```bash
 git clone https://github.com/premathul/GeQubit-SweetSpot-Finder.git
@@ -187,16 +89,14 @@ cd GeQubit-SweetSpot-Finder
 python -m pip install -e .
 ```
 
-Development installation:
+For development and testing,
 
 ```bash
 python -m pip install -e .[dev]
 pytest -q
 ```
 
----
-
-## 6. Example: angular Zeeman scan
+A simple magnetic-field scan can be performed using
 
 ```python
 import numpy as np
@@ -210,9 +110,9 @@ for theta in np.linspace(0, 90, 10):
     print(theta, f / 1e9)
 ```
 
----
+The parameters in this example are synthetic. They are intended to illustrate anisotropy and should not be interpreted as the calibrated response of a specific device.
 
-## 7. Example: angular derivatives
+A local angular sensitivity can be evaluated numerically with
 
 ```python
 from gequbit_sweetspot.optimization import central_gradient_2d
@@ -229,118 +129,17 @@ gradient = central_gradient_2d(
 print(gradient)
 ```
 
-The finite-difference step is a numerical parameter and should be convergence-tested.
+The finite-difference step is itself a numerical parameter. In serious calculations it should be varied to confirm convergence. Too large a step can smear local structure, while too small a step can amplify floating-point noise or numerical noise in an externally supplied frequency model.
 
----
+A key principle of this project is that there is no universally correct definition of a sweet spot. One device may be limited by plunger-gate noise, another by barrier-gate noise, and another by angular misalignment or magnetic-field drift. A point may maximize (T_2^*) while simultaneously reducing the Rabi frequency or exchange controllability. For that reason, the project is moving toward multi-objective optimization rather than a single scalar maximum. In a realistic design problem, one may want to maximize coherence while requiring a minimum drive strength, a minimum exchange coupling, or a maximum allowed sensitivity to fabrication variation.
 
-## 8. What constitutes a sweet spot?
+The current code deliberately separates candidate generation from scientific interpretation. A grid search can identify the largest value of a chosen metric, but that point should not automatically be labeled the “best” operating point without considering local curvature and uncertainty. In future versions, candidate regions will be characterized by angular confidence areas, parameter uncertainty, and tolerance to calibration errors. This is especially important for experiments because a narrow optimum that requires sub-degree alignment may be less useful than a slightly lower but much broader region.
 
-The repository deliberately does not impose a single universal definition.
+The present implementation does not derive the (g)-tensor from first principles. It assumes that the tensor, or a frequency model built from it, has already been obtained from experiment or from a separate device simulation. This design is intentional. The project is meant to serve as the optimization layer between a physics model and an experimental operating decision. In the future, it will interface more directly with the GeHoleQubit-Simulator repository so that (g)-tensor and susceptibility calculations can be fed into the sweet-spot search automatically.
 
-Possible definitions include:
+Another planned connection is to QuantumDot-Noise-Lab. The current (T_2^*) calculation assumes quasistatic Gaussian frequency noise. Real semiconductor devices can exhibit (1/f) noise, random telegraph signals, broadband noise, and gate-to-gate correlations that depend on frequency. A more complete workflow will replace a single covariance matrix with a frequency-dependent cross-spectral-density matrix (S_{ij}(f)). At that point the sweet-spot problem becomes a filter-function-weighted noise optimization rather than only a first-order quasistatic calculation.
 
-- minimum (|partial f/partial V|),
-- minimum total (sigma_f),
-- maximum (T_2^*),
-- minimum angular gradient,
-- a stationary point of (f_Z),
-- maximum coherence subject to a minimum Rabi frequency,
-- maximum coherence subject to an exchange-coupling constraint,
-- minimum sensitivity across several gates simultaneously.
-
-This distinction matters because a point that is optimal for one noise source may not be optimal for the total experimental noise budget.
-
----
-
-## 9. Robustness versus optimality
-
-A very sharp maximum in (T_2^*) can be experimentally less useful than a slightly lower but broad plateau.
-
-For that reason, the code includes derivative and curvature tools.
-
-A robust operating point should ideally be characterized by:
-
-- value of the target metric,
-- first derivatives,
-- second derivatives,
-- uncertainty in the model parameters,
-- sensitivity to angular misalignment,
-- sensitivity to gate calibration,
-- sensitivity to fabrication variation.
-
-Future versions will formalize multi-objective optimization around these quantities.
-
----
-
-## 10. Numerical validation
-
-Current automated checks include:
-
-- exact effective (g)-factor values for diagonal tensors,
-- finite-difference gradients of known analytic functions,
-- finite-difference Hessians of quadratic functions,
-- candidate ranking behavior,
-- positive covariance-derived noise,
-- positive finite (T_2^*).
-
----
-
-## 11. Units
-
-Typical units are:
-
-- (B): tesla,
-- (f_Z): hertz,
-- voltage sensitivity: hertz/volt,
-- voltage noise: volts,
-- angular derivatives: hertz/degree in the current helper functions,
-- (T_2^*): seconds.
-
-Care is required when comparing degree-based numerical derivatives with analytical derivatives written in radians.
-
----
-
-## 12. Scientific limitations
-
-The current implementation assumes the supplied (g)-tensor and susceptibilities are already meaningful representations of the device.
-
-It does not yet derive them from:
-
-- self-consistent electrostatics,
-- confinement wavefunctions,
-- multiband semiconductor Hamiltonians,
-- strain,
-- microscopic disorder,
-- atomistic interfaces.
-
-Therefore the sweet-spot search is only as physically reliable as the model supplied to it.
-
----
-
-## 13. Planned development
-
-### Near-term
-
-- full ((	heta,phi)) heat maps,
-- periodic handling of (phi),
-- local optimization after coarse grid search,
-- uncertainty-aware ranking,
-- confidence regions around sweet spots,
-- per-gate dephasing contributions,
-- CSV/JSON result export.
-
-### Intermediate
-
-- multi-objective optimization,
-- (T_1) and (T_2^*) joint optimization,
-- control-speed constraints,
-- alignment-error Monte Carlo,
-- gate-noise covariance inference,
-- automatic finite-difference convergence studies.
-
-### Long-term
-
-The intended workflow is
+The long-term architecture is therefore
 
 [
 g(V_i,	heta,phi)
@@ -350,73 +149,25 @@ f_Z
 
 abla_V f_Z
 ightarrow
-S_V(f)
+S_{ij}(f)
 ightarrow
 W(t)
 ightarrow
 T_2^*
 ightarrow
-	ext{robust operating point}.
+	ext{robust operating region}.
 ]
 
----
+The phrase “operating region” is intentional. Experimental robustness is usually more meaningful when expressed as a finite region of acceptable performance rather than as a single mathematically optimal coordinate.
 
-## 14. Relationship to other repositories
+Reproducibility is an important part of the project. A reported sweet spot should include the exact (g)-tensor or frequency model, magnetic-field magnitude, angular convention, angular grid, derivative step size, voltage-noise assumptions, covariance matrix, optimization metric, and Git commit. Reporting only a field angle without the model and conventions is generally insufficient for independent reproduction.
 
-This project is designed to complement:
+The current test suite verifies effective-(g) values for diagonal tensors, numerical gradients and Hessians against analytical functions, ranking logic, positive covariance-derived noise, and finite positive dephasing times. Additional tests will be added as optimization methods become more sophisticated.
 
-- **GeHoleQubit-Simulator** for confinement and (g)-tensor modeling,
-- **QuantumDot-Noise-Lab** for detailed noise spectra and filter-function calculations,
-- **GeDQD-Exchange-Simulator** for exchange-related sweet spots in double quantum dots.
+The project is suitable for synthetic studies, method development, comparison of operating strategies, and post-processing of device simulations. It should not be interpreted as a complete predictive model unless the supplied (g)-tensor, noise model, and control susceptibilities have been independently validated for the device of interest.
 
-The long-term goal is interoperability rather than duplicate implementations.
+## Contact
 
----
+**Athul Prem**
 
-## 15. Reproducibility
-
-A reported sweet spot should ideally include:
-
-- (g)-tensor,
-- magnetic-field magnitude,
-- angle convention,
-- angular grid,
-- derivative step size,
-- voltage-noise amplitudes,
-- covariance matrix,
-- optimization metric,
-- code commit,
-- uncertainty model.
-
-A single angle without this context is generally insufficient for reproducibility.
-
----
-
-## 16. Contributing
-
-Useful contributions include:
-
-- alternative optimization methods,
-- uncertainty propagation,
-- analytical derivatives,
-- visualization,
-- experimental alignment models,
-- benchmark cases,
-- documentation,
-- physically motivated example data.
-
-Every new metric should define exactly what is being optimized and in what units.
-
----
-
-## 17. License
-
-MIT License.
-
----
-
-## 18. Project status
-
-**Status:** active research development.
-
-The current code can already search and analyze synthetic angular sweet spots. The long-term objective is a robust, uncertainty-aware operating-point optimizer for realistic Ge/SiGe hole-spin-qubit devices.
+For questions, scientific discussion, collaboration, or suggestions concerning the project, please contact Athul Prem through the GitHub account associated with this repository.
